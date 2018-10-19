@@ -1,3 +1,13 @@
+
+# vacing
+# --begin--
+*.conf.json
+*.cache
+star_hk_name/
+stars_hk/
+.*.swp
+# --end--
+
 *.py[cod]
 
 # C extensions
