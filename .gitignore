@@ -5,7 +5,9 @@
 *.cache
 star_hk_name/
 stars_hk/
+name_process/
 .*.swp
+test_star*
 # --end--
 
 *.py[cod]

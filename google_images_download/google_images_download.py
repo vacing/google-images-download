@@ -32,6 +32,10 @@ import datetime
 import json
 import re
 import codecs
+import pickle
+import sys
+sys.path.append('../common/')
+from zhtools import langconv
 import socket
 
 args_list = ["keywords", "keywords_from_file", "prefix_keywords", "suffix_keywords",
@@ -51,7 +55,7 @@ def user_input():
 
     if object_check['config_file'] != '':
         records = []
-        json_file = json.load(open(config_file_check[0].config_file))
+        json_file = json.load(open(config_file_check[0].config_file, encoding='utf-8'))
         for record in range(0,len(json_file['Records'])):
             arguments = {}
             for i in args_list:
@@ -136,6 +140,7 @@ class googleimagesdownload:
                 return respData
             except Exception as e:
                 print(str(e))
+                return None
         else:  # If the Current Version of Python is 2.x
             try:
                 headers = {}
@@ -149,7 +154,8 @@ class googleimagesdownload:
                 page = response.read()
                 return page
             except:
-                return "Page Not found"
+                print("Page Not found")
+                return None
 
 
     # Download Page for more than 100 images
@@ -326,7 +332,7 @@ class googleimagesdownload:
                 urll2 = content[l3 + 19:l4]
                 return urll2
             except:
-                return "Cloud not connect to Google Images endpoint"
+                return "Could not connect to Google Images endpoint"
         else:  # If the Current Version of Python is 2.x
             try:
                 searchUrl = 'https://www.google.com/searchbyimage?site=search&sa=X&image_url=' + similar_images
@@ -407,7 +413,7 @@ class googleimagesdownload:
         if url:
             url = url
         elif similar_images:
-            print(similar_images)
+            print('similar_images: %s' % similar_images)
             keywordem = self.similar_images(similar_images)
             url = 'https://www.google.com/search?q=' + keywordem + '&espv=2&biw=1366&bih=667&site=webhp&source=lnms&tbm=isch&sa=X&ei=XosDVaCXD8TasATItgE&ved=0CAcQ_AUoAg'
         elif specific_site:
@@ -439,13 +445,13 @@ class googleimagesdownload:
     #keywords from file
     def keywords_from_file(self,file_name):
         search_keyword = []
-        with codecs.open(file_name, 'r', encoding='utf-8-sig') as f:
+        with codecs.open(file_name, 'r', encoding='utf-8') as f:
             if '.csv' in file_name:
                 for line in f:
                     if line in ['\n', '\r\n']:
                         pass
                     else:
-                        search_keyword.append(line.replace('\n', '').replace('\r', ''))
+                        search_keyword.append(line.replace('\n', '').replace('\r', '').replace(',', ' ').strip())
             elif '.txt' in file_name:
                 for line in f:
                     if line in ['\n', '\r\n']:
@@ -557,21 +563,23 @@ class googleimagesdownload:
             print("Image URL: " + image_url)
         try:
             req = Request(image_url, headers={
-                "User-Agent": "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"})
+                "User-Agent": "Mozilla/6.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"})
             try:
                 # timeout time to download an image
                 if socket_timeout:
                     timeout = float(socket_timeout)
                 else:
-                    timeout = 10
+                    timeout = 20
 
                 response = urlopen(req, None, timeout)
                 data = response.read()
+                print("image len= %d" % len(data))
                 response.close()
 
                 # keep everything after the last '/'
                 image_name = str(image_url[(image_url.rfind('/')) + 1:])
                 image_name = image_name.lower()
+                print(image_name)
                 # if no extension then add it
                 # remove everything after the image name
                 if image_format == "":
@@ -591,7 +599,7 @@ class googleimagesdownload:
                     path = main_directory + "/" + dir_name + "/" + prefix + image_name
                 else:
                     path = main_directory + "/" + dir_name + "/" + prefix + str(count) + ". " + image_name
-
+                print(path)
                 try:
                     output_file = open(path, 'wb')
                     output_file.write(data)
@@ -727,7 +735,7 @@ class googleimagesdownload:
 
                 #delay param
                 if arguments['delay']:
-                    time.sleep(int(arguments['delay']))
+                    time.sleep(float(arguments['delay']))
 
                 page = page[end_content:]
             i += 1
@@ -739,8 +747,7 @@ class googleimagesdownload:
 
 
     # Bulk Download
-    def download(self,arguments):
-
+    def download(self,arguments, regen_cache=True):
         #for input coming from other python files
         if __name__ != "__main__":
             for arg in args_list:
@@ -816,12 +823,25 @@ class googleimagesdownload:
             os.environ["https_proxy"] = arguments['proxy']
             ######Initialization Complete
 
+        cache_path = './download.cache'
+        if not regen_cache and os.path.exists(cache_path):
+            with open(cache_path, 'rb') as f:
+                cache = pickle.load(f)
+        else:
+            cache = []
+
         paths = {}
         for pky in prefix_keywords:
             for sky in suffix_keywords:     # 1.for every suffix keywords
                 i = 0
                 while i < len(search_keyword):      # 2.for every main keyword
-                    iteration = "\n" + "Item no.: " + str(i + 1) + " -->" + " Item name = " + str(pky) + str(search_keyword[i] + str(sky))
+                    kw = search_keyword[i]
+                    if kw in cache:
+                        print('skip %s' % kw)
+                        i += 1
+                        continue
+                    iteration = "\n" + "Item no.: " + str(i + 1) + " -->" + " Item name = [" + str(pky) + str(search_keyword[i] + str(sky)) + "]"
+                    # print(langconv.Converter('zh-hant').convert(iteration))
                     print(iteration)
                     print("Evaluating...")
                     search_term = pky + search_keyword[i] + sky
@@ -839,10 +859,14 @@ class googleimagesdownload:
 
                     url = self.build_search_url(search_term,params,arguments['url'],arguments['similar_images'],arguments['specific_site'],arguments['safe_search'])      #building main search url
 
+                    print(url)
                     if limit < 101:
                         raw_html = self.download_page(url)  # download page
                     else:
                         raw_html = self.download_extended_page(url,arguments['chromedriver'])
+
+                    if raw_html is None:
+                        continue
 
                     print("Starting Download...")
                     items,errorCount,abs_path = self._get_all_items(raw_html,main_directory,dir_name,limit,arguments)    #get all image items and download images
@@ -873,6 +897,9 @@ class googleimagesdownload:
                             self.create_directories(main_directory, final_search_term,arguments['thumbnail'])
                             self._get_all_items(new_raw_html, main_directory, search_term + " - " + key, limit,arguments)
 
+                    cache.append(kw)
+                    with open(cache_path, 'wb') as f:
+                        pickle.dump(cache, f, 0)
                     i += 1
                     print("\nErrors: " + str(errorCount) + "\n")
         if arguments['print_paths']:
@@ -881,6 +908,7 @@ class googleimagesdownload:
 
 #------------- Main Program -------------#
 def main():
+    regen_cache = True
     records = user_input()
     for arguments in records:
 
@@ -890,7 +918,7 @@ def main():
         else:  # or download multiple images based on keywords/keyphrase search
             t0 = time.time()  # start the timer
             response = googleimagesdownload()
-            paths = response.download(arguments)  #wrapping response in a variable just for consistency
+            paths = response.download(arguments, regen_cache=regen_cache)  #wrapping response in a variable just for consistency
 
             print("\nEverything downloaded!")
             t1 = time.time()  # stop the timer
