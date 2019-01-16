@@ -300,6 +300,9 @@ Arguments
 +-------------------+-------------+-------------------------------------------------------------------------------------------------------------------------------+
 | help              | h           | show the help message regarding the usage of the above arguments                                                              |
 +-------------------+-------------+-------------------------------------------------------------------------------------------------------------------------------+
+| use_cache         | uc          | use finished list cache or not, if set true, use(create if not exist) cache file in output_directory in case of recover       |
+|                   |             | download process from unexpected interrupt.                                                                                   |
++-------------------+-------------+-------------------------------------------------------------------------------------------------------------------------------+
 
 **Note:** If ``single_image`` or ``url`` parameter is not present, then keywords is a mandatory parameter. No other parameters are mandatory.
 

@@ -6,6 +6,9 @@
 
 # Import Libraries
 import sys
+import logging
+
+
 version = (3, 0)
 cur_version = sys.version_info
 if cur_version >= version:  # If the Current Version of Python is 3.0 or above
@@ -48,13 +51,13 @@ args_list = ["keywords", "keywords_from_file", "prefix_keywords", "suffix_keywor
 
 
 def user_input():
+    records = []
     config = argparse.ArgumentParser()
     config.add_argument('-cf', '--config_file', help='config file name', default='', type=str, required=False)
     config_file_check = config.parse_known_args()
     object_check = vars(config_file_check[0])
 
     if object_check['config_file'] != '':
-        records = []
         json_file = json.load(open(config_file_check[0].config_file, encoding='utf-8'))
         for record in range(0,len(json_file['Records'])):
             arguments = {}
@@ -114,10 +117,10 @@ def user_input():
         parser.add_argument('-sa', '--safe_search', default=False, help="Turns on the safe search filter while searching for images", action="store_true")
         parser.add_argument('-nn', '--no_numbering', default=False, help="Allows you to exclude the default numbering of images", action="store_true")
         parser.add_argument('-of', '--offset', help="Where to start in the fetched links", type=str, required=False)
+        parser.add_argument('-uc', '--use_cache', help="Use cache to begin from last time", default=True, type=bool, required=False)
 
         args = parser.parse_args()
         arguments = vars(args)
-        records = []
         records.append(arguments)
     return records
 
@@ -442,6 +445,15 @@ class googleimagesdownload:
                 size /= 1024.0
             return size
 
+    def valid_file_name(self, name):
+        invalid_chars = "?!/\\:*\"<>|/"
+        if name.endswith(' '):
+            return False
+        for c in invalid_chars:
+            if c in name:
+                return False
+        return True
+
     #keywords from file
     def keywords_from_file(self,file_name):
         search_keyword = []
@@ -451,13 +463,11 @@ class googleimagesdownload:
                     if line in ['\n', '\r\n']:
                         pass
                     else:
-                        search_keyword.append(line.replace('\n', '').replace('\r', '').replace(',', ' ').strip())
-            elif '.txt' in file_name:
-                for line in f:
-                    if line in ['\n', '\r\n']:
-                        pass
-                    else:
-                        search_keyword.append(line.replace('\n', '').replace('\r', ''))
+                        line = line.replace('\n', '').replace('\r', '').replace(',', ' ').strip()
+                        if not self.valid_file_name(line):
+                            logging.error('invalid file name[%s]' % line)
+                            exit(-1)
+                        search_keyword.append(line)
             else:
                 print("Invalid file type: Valid file types are either .txt or .csv \n"
                       "exiting...")
@@ -747,7 +757,7 @@ class googleimagesdownload:
 
 
     # Bulk Download
-    def download(self,arguments, regen_cache=True):
+    def download(self,arguments, use_cache=False):
         #for input coming from other python files
         if __name__ != "__main__":
             for arg in args_list:
@@ -823,11 +833,14 @@ class googleimagesdownload:
             os.environ["https_proxy"] = arguments['proxy']
             ######Initialization Complete
 
-        cache_path = './download.cache'
-        if not regen_cache and os.path.exists(cache_path):
+        cache_path = os.path.join(main_directory, 'download.cache')
+        print(cache_path)
+        if use_cache and os.path.exists(cache_path):
+            logging.error('use cache file[%s]' % cache_path)
             with open(cache_path, 'rb') as f:
                 cache = pickle.load(f)
         else:
+            logging.error('not use cache file')
             cache = []
 
         paths = {}
@@ -908,17 +921,16 @@ class googleimagesdownload:
 
 #------------- Main Program -------------#
 def main():
-    regen_cache = True
     records = user_input()
     for arguments in records:
-
+        use_cache = arguments['use_cache']
         if arguments['single_image']:  # Download Single Image using a URL
             response = googleimagesdownload()
             response.single_image(arguments['single_image'])
         else:  # or download multiple images based on keywords/keyphrase search
             t0 = time.time()  # start the timer
             response = googleimagesdownload()
-            paths = response.download(arguments, regen_cache=regen_cache)  #wrapping response in a variable just for consistency
+            paths = response.download(arguments, use_cache=use_cache)  #wrapping response in a variable just for consistency
 
             print("\nEverything downloaded!")
             t1 = time.time()  # stop the timer
